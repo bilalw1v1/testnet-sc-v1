@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Smart Contract UI</title>
+    <script src="https://cdn.jsdelivr.net/npm/web3@latest/dist/web3.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: rgb(0, 0, 0);
+            color: rgb(255, 255, 255);
+            text-align: center;
+            padding: 20px;
+            user-select: none;
+        }
+        .container {
+            max-width: 100%;
+            margin: auto;
+            background: rgb(0, 0, 0);
+            padding: 20px;
+            border-radius: 2px;
+            box-shadow: 0 0 10px black;
+        }
+button {
+            background: rgb(0, 0, 0);
+            color: rgb(255, 255, 255);
+            border: 2px double rgb(255, 255, 255);
+            padding: 12px;
+            cursor: pointer;
+            border-radius: 30px;
+            font-size: 16px;
+            width: 100%;
+            margin: 5px 0;        
+        }
+button:hover {
+            background: rgb(255, 255, 255);
+            color: rgb(0, 0, 0);
+            padding: 12px;
+            cursor: pointer;
+            border-radius: 30px;
+            font-size: 16px;
+            width: 100%;
+            margin: 5px 0;     
+           
+        }
+        input {
+            padding: 10px;
+            border-radius: 30px;
+            border: 1px solid black;
+            width: calc(100% - 20px);
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        .wallet-display {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 10px;
+            border: 1px solid white;
+            border-radius: 30px;
+        }
+        .copy-icon {
+            cursor: pointer;
+            font-size: 18px;
+            padding: 5px;
+            background: black;
+            color: white;
+            border-radius: 50%;
+            border: 1px solid white;
+        }
+        .popup {
+            display: none;
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: white;
+            color: black;
+            padding: 10px 20px;
+            border-radius: 30px 0px 30px 0px;
+            font-size: 14px;
+           
+            width: 50%;
+            
+        }
+        a {
+            color: blue;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+  
+   
+    <div class="container">
+        <h1>monad tests</h1>
+        <button onclick="connectWallet()">Connect Wallet</button>
+
+        <h3>Wallet</h3>
+        <div class="wallet-display">
+            <span id="walletAddress">Not Connected</span>
+            <span class="copy-icon" onclick="copyAddress()">📋</span>
+        </div>
+
+        <h3>Deposit</h3>
+        <input type="number" id="amount" placeholder="Enter amount in ETH">
+        <button onclick="deposit()">Deposit</button>
+
+        <h3>Claim Tokens</h3>
+        <button onclick="claim()">Claim</button>
+
+        <h3>Your Balance</h3>
+        <button onclick="getBalance()">Check Balance</button>
+        <p><b>Balance:</b> <span id="balance">0</span> MON</p>
+
+      <h3>Contract Balance</h3>
+        <button onclick="getContractBalance()">Check Contract Balance</button>
+        <p><b>Contract Balance:</b> <span id="contractBalance">0</span> MON</p>
+
+        <h3>Transaction Hash</h3>
+        <p><b>Last Tx:</b> <a id="txHash" href="#" target="_blank">None</a></p>
+    </div>
+
+    <div id="popup" class="popup"></div>
+
+    <script>
+        let web3;
+        let contract;
+        let userAddress;
+        let contractAddress = "0x075D1426D44084584772106a12321bAAE68506d2"; 
+        let explorerURL = "https://testnet.monadexplorer.com/tx/";
+
+        let abi = [
+        {
+            "inputs": [],
+            "stateMutability": "nonpayable",
+            "type": "constructor"
+        },
+        {
+            "anonymous": false,
+            "inputs": [
+                {
+                    "indexed": true,
+                    "internalType": "address",
+                    "name": "user",
+                    "type": "address"
+                },
+                {
+                    "indexed": false,
+                    "internalType": "uint256",
+                    "name": "amount",
+                    "type": "uint256"
+                }
+            ],
+            "name": "Claimed",
+            "type": "event"
+        },
+        {
+            "anonymous": false,
+            "inputs": [
+                {
+                    "indexed": true,
+                    "internalType": "address",
+                    "name": "user",
+                    "type": "address"
+                },
+                {
+                    "indexed": false,
+                    "internalType": "uint256",
+                    "name": "amount",
+                    "type": "uint256"
+                }
+            ],
+            "name": "Deposited",
+            "type": "event"
+        },
+        {
+            "inputs": [],
+            "name": "CLAIM_AMOUNT",
+            "outputs": [
+                {
+                    "internalType": "uint256",
+                    "name": "",
+                    "type": "uint256"
+                }
+            ],
+            "stateMutability": "view",
+            "type": "function"
+        },
+        {
+            "inputs": [
+                {
+                    "internalType": "address",
+                    "name": "",
+                    "type": "address"
+                }
+            ],
+            "name": "balances",
+            "outputs": [
+                {
+                    "internalType": "uint256",
+                    "name": "",
+                    "type": "uint256"
+                }
+            ],
+            "stateMutability": "view",
+            "type": "function"
+        },
+        {
+            "inputs": [],
+            "name": "claim",
+            "outputs": [],
+            "stateMutability": "nonpayable",
+            "type": "function"
+        },
+        {
+            "inputs": [],
+            "name": "deposit",
+            "outputs": [],
+            "stateMutability": "payable",
+            "type": "function"
+        },
+        {
+            "inputs": [
+                {
+                    "internalType": "address",
+                    "name": "user",
+                    "type": "address"
+                }
+            ],
+            "name": "getUserBalance",
+            "outputs": [
+                {
+                    "internalType": "uint256",
+                    "name": "",
+                    "type": "uint256"
+                }
+            ],
+            "stateMutability": "view",
+            "type": "function"
+        },
+        {
+            "inputs": [],
+            "name": "owner",
+            "outputs": [
+                {
+                    "internalType": "address",
+                    "name": "",
+                    "type": "address"
+                }
+            ],
+            "stateMutability": "view",
+            "type": "function"
+        },
+        {
+            "stateMutability": "payable",
+            "type": "receive"
+        }
+    ]; // ABI yahan as it is paste karna
+
+        function showPopup(message) {
+            let popup = document.getElementById("popup");
+            popup.innerText = message;
+            popup.style.display = "block";
+            setTimeout(() => { popup.style.display = "none"; }, 4000);
+        }
+
+       function shortAddress(address) {
+            return address.slice(0, 9) + "..." + address.slice(-5);
+        }
+
+        async function connectWallet() {
+            if (window.ethereum) {
+                web3 = new Web3(window.ethereum);
+                await window.ethereum.request({ method: "eth_requestAccounts" });
+                let accounts = await web3.eth.getAccounts();
+                userAddress = accounts[0];
+                document.getElementById("walletAddress").innerText = shortAddress(userAddress);
+                contract = new web3.eth.Contract(abi, contractAddress);
+                showPopup("Wallet Connected!");
+            } else {
+                showPopup("Metamask Not Found!");
+            }
+        }
+
+        function copyAddress() {
+            if (!userAddress) return showPopup("No address to copy!");
+            navigator.clipboard.writeText(userAddress);
+            showPopup("Address Copied!");
+        }
+
+        async function deposit() {
+            let amount = document.getElementById("amount").value;
+            if (!amount) return showPopup("Enter amount!");
+
+            let accounts = await web3.eth.getAccounts();
+            contract.methods.deposit().send({ from: accounts[0], value: web3.utils.toWei(amount, "ether") })
+                .on("transactionHash", function (hash) {
+                    let txLink = explorerURL + hash;
+                    document.getElementById("txHash").href = txLink;
+                    document.getElementById("txHash").innerText = hash.substring(0, 10) + "...";
+                    showPopup("Deposit Transaction Sent!");
+                })
+                .on("receipt", function () {
+                    showPopup("Deposit Successful!");
+                });
+        }
+
+        async function claim() {
+            let accounts = await web3.eth.getAccounts();
+            contract.methods.claim().send({ from: accounts[0] })
+                .on("transactionHash", function (hash) {
+                    let txLink = explorerURL + hash;
+                    document.getElementById("txHash").href = txLink;
+                    document.getElementById("txHash").innerText = hash.substring(0, 10) + "...";
+                    showPopup("Claim Transaction Sent!");
+                })
+                .on("receipt", function () {
+                    showPopup("Claim Successful!");
+                });
+        }
+
+        async function getBalance() {
+            let accounts = await web3.eth.getAccounts();
+            let balance = await contract.methods.getUserBalance(accounts[0]).call();
+            document.getElementById("balance").innerText = web3.utils.fromWei(balance, "ether");
+            showPopup("Balance Updated!");
+        }
+
+        async function getContractBalance() {
+            let balance = await web3.eth.getBalance(contractAddress);
+            document.getElementById("contractBalance").innerText = web3.utils.fromWei(balance, "ether");
+            showPopup("Contract Balance Updated!");
+        }
+    </script>
+</body>
+</html>
